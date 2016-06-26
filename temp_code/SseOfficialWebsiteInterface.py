@@ -1,12 +1,51 @@
 '''
 Created on 2016年6月23日
-@author: zhang
+@author: zhangxun
 '''
 
 class SseOfficialWebsiteInterface(object):
     """
     SSE官方网站的接口
     """
+    @staticmethod
+    def __MakeDirsIfPathNotExists(dirPath:str) -> str:
+        """如果某目录不存在, 就递归的创建出来这个目录"""
+        import os
+        if dirPath in (None, ""):
+            dirPath = "."
+        dirPath = os.path.abspath(dirPath)
+        if os.path.exists(dirPath) == False:
+            os.makedirs(dirPath)
+        return dirPath
+    
+    @staticmethod
+    def __SaveStrToFile(strToSave:str, dirPath:str, fileName:str, fileMode:str) -> str:
+        """保存字符串到文件中, 并返回文件的路径
+        r: 读取文本文件; 如果文件不存在, Python将会给出一个错误
+        w:(覆盖写入) 写入文木文件, 如果 文件己经存在, 则会被覆盖掉; 如果文件不存在, 则会被创建出來
+        a:(附加写入) 向文本文件添加内容, 如果文件己经存在, 则新数据就会被添加进去, 如果文件不存在, 则会被创建出来 
+        """
+        dirPath = SseOfficialWebsiteInterface.__MakeDirsIfPathNotExists(dirPath)
+        import os
+        filePath = os.path.join(dirPath, fileName)
+        with open(filePath, fileMode) as f:
+            f.write(strToSave)
+        return filePath
+    
+    @staticmethod
+    def __SaveBytesToFile(bytesToSave:bytes, dirPath:str, fileName:str, fileMode:str) -> str:
+        """保存字符串到文件中, 并返回文件的路径
+        r: 读取文本文件; 如果文件不存在, Python将会给出一个错误
+        w:(覆盖写入) 写入文木文件, 如果 文件己经存在, 则会被覆盖掉; 如果文件不存在, 则会被创建出來
+        a:(附加写入) 向文本文件添加内容, 如果文件己经存在, 则新数据就会被添加进去, 如果文件不存在, 则会被创建出来 
+        """
+        dirPath = SseOfficialWebsiteInterface.__MakeDirsIfPathNotExists(dirPath)
+        import os
+        filePath = os.path.join(dirPath, fileName)
+        with open(filePath, fileMode) as f:
+            f.write(bytesToSave)
+        return filePath
+    
     @staticmethod
     def __GetJsonName(instrumentID:str) -> str:
         import datetime
@@ -51,7 +90,7 @@ class SseOfficialWebsiteInterface(object):
         #
         destUrl = urlPart0 + "&" + urlPart1 + "&" + urlPart2
         #
-        return tuple((destUrl, jsonName, selectFields))
+        return tuple((destUrl, jsonName))
 
     @staticmethod
     def __OneMinuteLineDataSelectFields() -> str:
@@ -80,7 +119,7 @@ class SseOfficialWebsiteInterface(object):
         #
         dstUrl = urlPart0 + "&" + urlPart1 + "&" + urlPart2 + "&" + urlPart3
         #
-        return  tuple((dstUrl, jsonName, selectFields))
+        return  tuple((dstUrl, jsonName))
 
     @staticmethod
     def __OneDayLineDataSelectField() -> str:
@@ -115,17 +154,25 @@ class SseOfficialWebsiteInterface(object):
         #
         destUrl = urlPart0 + "&" + urlPart1 + "&" + urlPart2 + urlPart3
         #
-        return tuple((destUrl, jsonName, selectFields))
-
+        return tuple((destUrl, jsonName))
+    
     @staticmethod
-    def __GetWebsiteResponseStr(webUrl:str, strEncoding:str) -> str:
+    def __GetWebsiteResponseBytes(webUrlOrRequest) -> bytes:
+        """
+        ;发给网站一个请求, 读取网站的响应字节流, 并返回
+        """
+        import urllib
+        rsp = urllib.request.urlopen(webUrlOrRequest)
+        rspBytes = rsp.read()
+        return rspBytes
+    
+    @staticmethod
+    def __GetWebsiteResponseStr(webUrlOrRequest, someEncoding:str) -> str:
         """
         ;发给网站一个请求，读取网站的响应字节流，然后将其解码成字符串，并返回
         """
-        from urllib import request
-        rsp = request.urlopen(webUrl)
-        rspBytes = rsp.read()
-        rspStr = rspBytes.decode(strEncoding)
+        rspBytes = SseOfficialWebsiteInterface.__GetWebsiteResponseBytes(webUrlOrRequest)
+        rspStr = rspBytes.decode(someEncoding)
         return rspStr
 
     @staticmethod
@@ -244,17 +291,164 @@ class SseOfficialWebsiteInterface(object):
         return kLines
     
     @staticmethod
-    def SecurityListUrlStockType1() -> str:
-        """A股"""
-        someUrl = r"http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName=&stockType=1"
-        return someUrl
+    def __RequestForStockType(stockType:str):
+        """
+        ;首页->产品->股票->股票列表->A股
+        ;http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName=&stockType=1
+        ;首页->产品->股票->股票列表->B股
+        ;http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName=&stockType=2
+        """
+        stockTyp_ = stockType[:]
+        if stockType == "Ashare":  # A股
+            stockType = 1
+        elif stockType == "Bshare":  # B股
+            stockType = 2
+        else:
+            raise Exception("unknown SSE stock type:%s" % stockType)
+        #
+        urlPart0 = r"http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName="
+        urlPart1 = r"&stockType={stockType}".format(stockType=stockTyp_)
+        requestUrl = urlPart0 + urlPart1
+        import urllib
+        requestHeaders = {'Referer': 'http://www.sse.com.cn/assortment/stock/list/share/',
+                          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                          'Accept-Encoding': 'gzip, deflate, sdch',
+                          'Accept-Language': 'zh-CN,zh;q=0.8',
+                          'Connection': 'keep-alive'}
+        someRequest = urllib.request.Request(url=requestUrl, headers=requestHeaders)
+        return ((someRequest, "为了统一, 填充jsonName字段"))
+    
     @staticmethod
-    def __SecurityListUrlStockType2() -> str:
-        """B股"""
-        someUrl = r"http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName=&stockType=2"
-        return someUrl
+    def __RequestForBondType(bondType:str):
+        """
+        EXPIRED=false 未到期债券代码列表
+        EXPIRED=true  已到期债券代码列表
+        ;
+        ;首页->产品->债券->债权列表->国债列表
+        ;http://query.sse.com.cn/security/bond/downloadBondList.do?BondType=1&jsonCallBack=jsonpCallback90364025&_=1446879063015&EXPIRED=false
+        ;首页->产品->债券->债权列表->地方债列表
+        ;http://query.sse.com.cn/security/bond/downloadBondList.do?BondType=2&jsonCallBack=jsonpCallback90364025&_=1446879063015&EXPIRED=false
+        ;首页->产品->债券->债权列表->公司债、企业债列表
+        ;http://query.sse.com.cn/security/bond/downloadBondList.do?BondType=3&jsonCallBack=jsonpCallback90364025&_=1446879063015&EXPIRED=false
+        ;首页->产品->债券->债权列表->可转换债列表
+        ;http://query.sse.com.cn/security/bond/downloadBondList.do?BondType=4&jsonCallBack=jsonpCallback90364025&_=1446879063015&EXPIRED=false
+        ;首页->产品->债券->债权列表->分离债列表
+        ;http://query.sse.com.cn/security/bond/downloadBondList.do?BondType=5&jsonCallBack=jsonpCallback90364025&_=1446879063015&EXPIRED=false
+        """
+        bondTyp_ = bondType[:]
+        if bondType == "GZLB":  # 国债列表
+            bondType = 1
+        elif bondType == "DFZLB":  # 地方债列表
+            bondType = 2
+        elif bondType == "GSZ_QYZLB":  # 公司债、企业债列表
+            bondType = 3
+        elif bondType == "KZHZLB":  # 可转换债列表
+            bondType = 4
+        elif bondType == "FLZLB":  # 分离债列表
+            bondType = 5
+        else:
+            raise Exception("unknown SSE bond type:%s" % bondType)
+        #
+        jsonName = SseOfficialWebsiteInterface.__GetJsonName(bondTyp_)
+        urlPart0 = r"http://query.sse.com.cn/security/bond/downloadBondList.do?"
+        urlPart1 = r"BondType={bondType}&EXPIRED=false&jsonCallBack={jsonName}&_={unixTimeStamp}"
+        urlPart1 = urlPart1.format(bondType=bondType, jsonName=jsonName,
+                                   unixTimeStamp=SseOfficialWebsiteInterface.__CurrentUnixTimeStamp())
+        requestUrl = urlPart0 + urlPart1
+        import urllib
+        requestHeaders = {'Referer': 'http://www.sse.com.cn/assortment/bonds/list/',
+                          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                          'Accept-Encoding': 'gzip, deflate, sdch',
+                          'Accept-Language': 'zh-CN,zh;q=0.8',
+                          'Connection': 'keep-alive'}
+        someRequest = urllib.request.Request(url=requestUrl, headers=requestHeaders)
+        return tuple((someRequest, jsonName))
+    
+    @staticmethod
+    def __RequestForFundType(fundType:str):
+        """
+        http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback26983&isPagination=true&pageHelp.pageSize=25&pageHelp.pageNo=1&pageHelp.beginPage=1&pageHelp.cacheSize=1&pageHelp.endPage=5&sqlId=COMMON_SSE_ZQPZ_ETFLB_L_NEW&_=1466921952396
+        http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback13218&isPagination=true&pageHelp.pageSize=25&pageHelp.pageNo=1&pageHelp.beginPage=1&pageHelp.cacheSize=1&pageHelp.endPage=5&sqlId=COMMON_SSE_ZQPZ_LOFLB_L_NEW&_=1466921952398
+        http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback48252&isPagination=true&pageHelp.pageSize=25&pageHelp.pageNo=1&pageHelp.beginPage=1&pageHelp.cacheSize=1&pageHelp.endPage=5&sqlId=COMMON_SSE_ZQPZ_FJLOFLB_L_NEW&_=1466921952399
+        http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback82721&isPagination=true&pageHelp.pageSize=25&pageHelp.pageNo=1&pageHelp.beginPage=1&pageHelp.cacheSize=1&pageHelp.endPage=5&sqlId=COMMON_SSE_ZQPZ_JYXHBJJLB_L_NEW&_=1466921952397
+        http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback40584&isPagination=true&pageHelp.pageSize=25&pageHelp.pageNo=1&pageHelp.beginPage=1&pageHelp.cacheSize=1&pageHelp.endPage=5&sqlId=COMMON_SSE_ZQPZ_JJLB_L_NEW&_=1466921952400
+        """
+        if fundType == "ETF":
+            sqlId = "COMMON_SSE_ZQPZ_ETFLB_L_NEW"
+        elif fundType == "LOF":
+            sqlId = "COMMON_SSE_ZQPZ_LOFLB_L_NEW"
+        elif fundType == "FJLOF":  # 分级LOF
+            sqlId = "COMMON_SSE_ZQPZ_FJLOFLB_L_NEW"
+        elif fundType == "JYXHBJJ":  # 交易型货币基金
+            sqlId = "COMMON_SSE_ZQPZ_JYXHBJJLB_L_NEW"
+        elif fundType == "FBSJJ":  # 封闭式基金
+            sqlId = "COMMON_SSE_ZQPZ_JJLB_L_NEW"
+        elif fundType == "SSSSHBJJ":  # 不能用
+            sqlId = "COMMON_SSE_ZQPZ_JJLB_SSSSHBJJLB_L"
+        else:
+            raise Exception("TODO:")
+        #
+        jsonName = SseOfficialWebsiteInterface.__GetJsonName(fundType)
+        dstUrl = r"http://query.sse.com.cn/commonQuery.do?jsonCallBack={jsonName}&isPagination=false&sqlId={sqlId}&_={unixTimeStamp}"
+        dstUrl = dstUrl.format(jsonName=jsonName, sqlId=sqlId,
+                               unixTimeStamp=SseOfficialWebsiteInterface.__CurrentUnixTimeStamp())
+        import urllib
+        requestHeaders = {'Referer': 'http://www.sse.com.cn/assortment/bonds/list/',
+                          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                          'Accept-Encoding': 'gzip, deflate, sdch',
+                          'Accept-Language': 'zh-CN,zh;q=0.8',
+                          'Connection': 'keep-alive'}
+        someRequest = urllib.request.Request(url=dstUrl, headers=requestHeaders)
+        return tuple((someRequest, jsonName))
+    
+    @staticmethod
+    def TempStore(someUrl, someEncoding, dirPath, fileName, fileMode:"w"):
+        """x"""
+        rspStr = SseOfficialWebsiteInterface.__GetWebsiteResponseStr(someUrl, someEncoding)
+        filePath = SseOfficialWebsiteInterface.__SaveStrToFile(rspStr, dirPath, fileName, fileMode)
+        print(filePath)
+        return None
+    
+    @staticmethod
+    def TempStor2(webUrlOrRequest, dirPath, fileName, fileMode:"wb"):
+        """x"""
+        rspBytes = SseOfficialWebsiteInterface.__GetWebsiteResponseBytes(webUrlOrRequest)
+        filePath = SseOfficialWebsiteInterface.__SaveBytesToFile(rspBytes, dirPath, fileName, fileMode)
+        print(filePath)
+        return None
+    @staticmethod
+    def yyyymmdd_securityType_typeDetail():
+        return None
+    
         
 if __name__ == "__main__":
-    sth = SseOfficialWebsiteInterface.GetOneMinuteLineData("500038")
-    print(sth)
+    # sth = SseOfficialWebsiteInterface.GetOneMinuteLineData("500038")
+    # print(sth)
+    dirPath = r"D:\_sse_files"
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForStockType("Ashare")[0],
+                                          dirPath, "Ashare.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForStockType("Bshare")[0],
+                                          dirPath, "Bshare.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForBondType("GZLB")[0],
+                                          dirPath, "GZLB.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForBondType("DFZLB")[0],
+                                          dirPath, "DFZLB.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForBondType("GSZ_QYZLB")[0],
+                                          dirPath, "GSZ_QYZLB.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForBondType("KZHZLB")[0],
+                                          dirPath, "KZHZLB.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForBondType("FLZLB")[0],
+                                          dirPath, "FLZLB.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForFundType("ETF")[0],
+                                          dirPath, "ETF.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForFundType("LOF")[0],
+                                          dirPath, "LOF.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForFundType("FJLOF")[0],
+                                          dirPath, "FJLOF.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForFundType("JYXHBJJ")[0],
+                                          dirPath, "JYXHBJJ.txt", "wb")
+    SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForFundType("FBSJJ")[0],
+                                          dirPath, "FBSJJ.txt", "wb")
+    
+    print("will EXIT...")
     exit(0)

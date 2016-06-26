@@ -5,14 +5,21 @@ Created on 2016年6月25日
 
 class UrlRetrieve(object):
     """下载类"""
-    def __init__(self, srcUrl:str, localDirPath:str, localFileName:str, printGap:int=100) -> None:
-        self.__srcUrl = srcUrl
+    def __init__(self, srcUrlOrRequest, localDirPath:str, localFileName:str, printGap:int=100) -> None:
+        import urllib
+        self.__srcUrlOrRequest = srcUrlOrRequest
         self.__localDirPath = localDirPath  # 本地文件所在的路径, 赋值"."则为程序的当前路径
         self.__localFileName = localFileName  # 本地文件的名称
         self.__printGap = printGap
         self.__progressBar = float(0)
         self.__HandleDependence()  # 确保本地文件夹是存在的
-        self.__DoUrlRetrieve()
+        if type(self.__srcUrlOrRequest) == type(""):
+            #self.__DoUrlRetrieve()
+            self.__Do2()
+        elif type(self.__srcUrlOrRequest) == type(urllib.request.Request("https://www.baidu.com/")):
+            self.__Do2()
+        else:
+            raise Exception("无法识别的srcUrlOrRequest({xx})".format(xx=srcUrlOrRequest))
         self.__progressBar = float(100)  # 假定, python的系统函数执行完毕, 就是全部下载完成了
         self.__PrintInfo(" DONE.")
         return None
@@ -23,7 +30,20 @@ class UrlRetrieve(object):
         import os
         localFilePath = os.path.join(self.__localDirPath, self.__localFileName)
         print(localFilePath)
-        urllib.request.urlretrieve(self.__srcUrl, localFilePath, self.__ReportHook)
+        filename, headers = urllib.request.urlretrieve(self.__srcUrl, localFilePath, self.__ReportHook)
+        print(filename)
+        print(headers)
+        return None
+    
+    def __Do2(self) -> None:
+        """假设本地文件所在的目录已经存在"""
+        import urllib
+        import os
+        localFilePath = os.path.join(self.__localDirPath, self.__localFileName)
+        print(localFilePath)
+        remoteFile = urllib.request.urlopen(self.__srcUrlOrRequest)
+        with open(localFilePath, "wb") as binFile:
+            binFile.write(remoteFile.read())
         return None
 
     def __ReportHook(self, transferredBlockCount, blockSize, fileTotalSize) -> None:
@@ -63,5 +83,6 @@ class UrlRetrieve(object):
     
 if __name__ == "__main__":
     srcUrl = r"http://infopub.sgx.com/Apps?A=COW_Tickdownload_Content&B=TimeSalesData&F=3597&G=WEBPXTICK_DT-20160610.zip"
+    srcUrl = r"http://query.sse.com.cn/security/stock/downloadStockListFile.do?csrcCode=&stockCode=&areaName=&stockType=1"
     UrlRetrieve(srcUrl=srcUrl, localDirPath="./xxx/yyy/zzz", localFileName="zzz.xyz", printGap=1)
     exit(0)
