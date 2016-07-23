@@ -419,12 +419,31 @@ class SseOfficialWebsiteInterface(object):
     @staticmethod
     def yyyymmdd_securityType_typeDetail():
         return None
+    @staticmethod
+    def ReadAshareBshareFile(filePath:str, fileEncoding:str):
+        with open(filePath, "rb") as f:
+            content = f.read()
+        content = content.decode(fileEncoding)
+        SseOfficialWebsiteInterface.ParserForShareContent(content)
+        return None
+    @staticmethod
+    def ParserForShareContent(content:str):
+        lines = content.split("\n")
+        for line in lines:
+            fields = line.split("\t")
+            for field in fields:
+                field.trim(" \t\r")
+        print("xxx")
+        return None
     
         
 if __name__ == "__main__":
     # sth = SseOfficialWebsiteInterface.GetOneMinuteLineData("500038")
     # print(sth)
+    import os
     dirPath = r"D:\_sse_files"
+    SseOfficialWebsiteInterface.ReadAshareBshareFile(os.path.join(dirPath, "Ashare.txt"),"gbk")
+    exit(0)
     SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForStockType("Ashare")[0],
                                           dirPath, "Ashare.txt", "wb")
     SseOfficialWebsiteInterface.TempStor2(SseOfficialWebsiteInterface._SseOfficialWebsiteInterface__RequestForStockType("Bshare")[0],
