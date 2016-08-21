@@ -1,0 +1,31 @@
+struct ReqUserLogin
+{
+    [get]
+    int msgId;
+    [get]
+    string msgName;
+    [get][set][default=null][comment=请求ID]
+    int reqId;
+    [get][set][default=null][comment=用户名]
+    string userName;
+    [get][set][default=null][comment=密码]
+    string password;
+};
+
+struct RspUserLogin
+{
+    [get]
+    int msgId;
+    [get]
+    string msgName;
+    [get][set][default=null][comment=请求ID]
+    int reqId;
+    [get][set][default=null][comment=返回值]
+    int rtnId;
+    [get][set][default=null][comment=返回消息]
+    int rtnMsg;
+    [get][set][default=null][comment=用户名]
+    string userName;
+    [get][set][default=null][comment=密码]
+    string password;
+};
