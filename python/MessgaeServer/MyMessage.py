@@ -84,12 +84,17 @@ class MyMsgHeader(object):
         self.__json_msgBodyLen = None  # 消息体的长度,可不填
         self.__json_dateTime = None  # 消息携带的时间戳
         self.__json_checksum = None  # 消息体的校验和,可不填
+        self.__msgTrailerBytes = None
         self.SetMsgTrailer(msgTrailer)
         return None
      
     @property
     def msgTrailer(self):
         return self.__json_msgTrailer
+    
+    @property
+    def msgTrailerBytes(self):
+        return self.__msgTrailerBytes
     
     @property
     def msgTrailerHexRepresentation(self):
@@ -125,12 +130,15 @@ class MyMsgHeader(object):
         return
     
     @staticmethod
-    def GetMsgHeaderTrailer():
+    def GetMsgHeaderTrailerBytes():
+        return b"\r\n"
+    @staticmethod
+    def GetMsgHeaderTrailerStr():
         """
         ;一条消息有消息头,消息体,消息尾,一条消息的尾部字符串就是消息尾
         ;消息头也有一个尾部字符串,用来判断消息头的结尾处
         """
-        return "\r\n"
+        return MyMsgHeader.GetMsgHeaderTrailerBytes().decode(encoding='ascii', errors='strict')
     
     def SetMsgTrailer(self, msgTrailer:str) -> None:
         """设置消息尾,消息尾是记录在消息头中的"""
@@ -203,17 +211,14 @@ class MyMsgHeader(object):
         dstObj.__json_msgBodyLen = srcDict.get("msgBodyLen", None)
         dstObj.__json_dateTime = srcDict.get("dateTime", None)
         dstObj.__json_checksum = srcDict.get("checksum", None)
-        if dstObj.msgTrailer == None:
-            assert dstObj.msgTrailerHexRepresentation != None
-        elif dstObj.msgTrailerHexRepresentation == None:
-            assert dstObj.msgTrailer != None
-        else:
-            assert False  # 绝对不可以运行到这里
-            
+        
+        if dstObj.msgTrailer == None == dstObj.msgTrailerHexRepresentation:
+            return None
+        # 如果"16进制描述"是有值的,那么以16进制描述为准
         if dstObj.msgTrailerHexRepresentation != None:
             import binascii
-            msgTrailerBytes = binascii.a2b_hex(hexstr=dstObj.msgTrailerHexRepresentation)
-            dstObj.msgTrailer = msgTrailerBytes.decode(encoding='utf_8', errors='strict')
+            dstObj.__msgTrailerBytes = binascii.a2b_hex(hexstr=dstObj.msgTrailerHexRepresentation)
+            dstObj.msgTrailer = dstObj.__msgTrailerBytes.decode(encoding='utf_8', errors='strict')
         return dstObj
         
     def ProcessMsgTrailerAndSoOn(self):
@@ -243,6 +248,8 @@ class MyMessage(object):
         dstStr += self.__msgBody.__str__()
         dstStr += self.__msgHeader.GetMsgTrailer()
         return dstStr
+#######################
+    
 #######################
 if __name__ == "__main__":
     from MyMessageBody import *

@@ -4,6 +4,8 @@ Created on 2016年8月21日
 @author: zhang
 '''
 ###############################
+import logging
+###############################
 class NetBuffer(object):
     """socket使用的网络缓冲区类"""
     
@@ -14,7 +16,7 @@ class NetBuffer(object):
     
     def __init__(self, theSocket) -> None:
         self.__sock = theSocket
-        self.__buf = None
+        self.__buf = b""
         # 你永远也不知道用户会做出来什么事情,所以,用户可能使用的每一个函数,都需要强行捕获所有异常(-_-!)
         try:
             self.OnSocketCreated()
@@ -33,6 +35,7 @@ class NetBuffer(object):
     
     def OnSocketClosed(self) -> None:
         """NetBuffer中的socket被外部销毁时,此函数被调用"""
+        self.__buf = b""
         import datetime
         print(datetime.datetime.now(), ", ",
               "getpeername=", self.__sock.getpeername(), ", ",
@@ -47,6 +50,7 @@ class NetBuffer(object):
     
     def OnDataReceived(self, receivedData) -> None:
         """socket接收数据后,此函数被调用"""
+        self.__buf += receivedData
         import datetime
         print(datetime.datetime.now(), ", ",
               "getpeername=", self.__sock.getpeername(), ", ",
@@ -71,6 +75,8 @@ class SelectorTcpSerer(object):
         self.__selector = None
         self.__isAlive = True
         self.__createNetBuffer = createNetBuffer  # 可以创建NetBuffer对象(或者它的子类的对象)的一个静态函数
+        self.__threadPoolExecutor = None
+        self.__maxWorkers = 10  # ThreadPoolExecutor的max_workers
         return None
     
     @property
@@ -89,6 +95,15 @@ class SelectorTcpSerer(object):
     @listenBacklog.setter
     def listenBacklog(self, new_value) -> None:
         self.__listenBacklog = new_value
+        return None
+    
+    @property
+    def maxWorkers(self):
+        return self.__maxWorkers
+    
+    @maxWorkers.setter
+    def maxWorkers(self, new_value) -> None:
+        self.__maxWorkers = new_value
         return None
     
     def Run(self) -> None:
@@ -121,6 +136,9 @@ class SelectorTcpSerer(object):
     
     def __initialize(self) -> None:
         """命名参考了APR的apr_initialize()函数"""
+        # 初始化ThreadPoolExecutor
+        import concurrent.futures
+        self.__threadPoolExecutor = concurrent.futures.thread.ThreadPoolExecutor(max_workers=self.__maxWorkers)
         # 初始化listenSocket
         import socket
         self.__listenSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -140,27 +158,35 @@ class SelectorTcpSerer(object):
     
     def __terminate(self) -> None:
         """命名参考了APR的apr_terminate()函数"""
-        # 待删除的fileObj需要先存起来,不然会报错：RuntimeError: dictionary changed size during iteration
-        selectorKeyList = []
-        for selectorKey in self.__selector.get_map().values():
-            if selectorKey.fileobj.fileno() != self.__listenSock.fileno():
-                selectorKeyList.append(selectorKey)
-            else:
-                pass
-        # 清理selectors.BaseSelector中的各个SelectorKey,
-        for selectorKey in selectorKeyList:
-            fileObj = selectorKey.fileobj
-            netBuffer = selectorKey.data
-            self.__CleanSocket(fileObj, netBuffer, None)
+        if self.__selector != None:
+            # 待删除的fileObj需要先存起来,不然会报错：RuntimeError: dictionary changed size during iteration
+            otherList = []
+            selectorKeyList = []
+            for selectorKey in self.__selector.get_map().values():
+                if (self.__listenSock == None) or (selectorKey.fileobj.fileno() != self.__listenSock.fileno()):
+                    selectorKeyList.append(selectorKey)
+                else:
+                    otherList.append(selectorKey)
+            # 清理selectors.BaseSelector中的各个SelectorKey,
+            for selectorKey in selectorKeyList:
+                fileObj = selectorKey.fileobj
+                netBuffer = selectorKey.data
+                self.__CleanSocket(fileObj, netBuffer, None)
+            # 清理其他的selectorKey
+            for selectorKey in otherList:
+                self.__selector.unregister(selectorKey.fileobj)
+            # 关闭selectors.BaseSelector
+            self.__selector.close()
+            self.__selector = None 
         # 清理监听socket
-        self.__listenSock.close()
-        selectorKey = self.__selector.unregister(self.__listenSock)
-        selectorKey = selectorKey
-        # 关闭selectors.BaseSelector
-        self.__selector.close()
-        # 刷新内存中各个变量的值
-        self.__listenSock = None
-        self.__selector = None
+        if self.__listenSock != None:
+            self.__listenSock.close()
+            self.__listenSock = None
+        # 清理ThreadPoolExecutor
+        if self.__threadPoolExecutor != None:
+            # Clean-up the resources associated with the Executor.
+            self.__threadPoolExecutor.shutdown(wait=True)
+            self.__threadPoolExecutor = None
         #
         return None
     
@@ -196,7 +222,7 @@ class SelectorTcpSerer(object):
         try:
             data = fileObj.recv(4096)
             if data:
-                netBuffer.OnDataReceived(data)
+                self.__threadPoolExecutor.submit(NetBuffer.OnDataReceived(netBuffer, data))
             else:
                 self.__CleanSocket(fileObj, netBuffer, None)
                 isCleaned = True
@@ -238,11 +264,14 @@ def CloseSelectorTcpServer(tcpServer, seconds):
     return None
 ###############################
 if __name__ == "__main__":
+    logging.basicConfig(filename="log.log", filemode='w', level=logging.DEBUG,
+                        format="%(asctime)s|%(levelname)s|%(name)s|%(process)d|%(thread)d|%(message)s")
+    # [%s]->[%(asctime)s],[%d]->[%(thread)d]
     tcpServer = SelectorTcpSerer()
     tcpServer.pairHostPort = ("127.0.0.1", 60000)
     tcpServer.listenBacklog = 10
     import _thread
-    _thread.start_new_thread(CloseSelectorTcpServer, (tcpServer, 30))
+    _thread.start_new_thread(CloseSelectorTcpServer, (tcpServer, 300))
     tcpServer.Run()
     print("tcpServer.Run() done.")
     exit(0)
