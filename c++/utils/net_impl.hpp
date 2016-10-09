@@ -135,9 +135,11 @@ StdStringPtr RecvBuffer::ParseMessage(const char* buff, uint32_t& posBeg, uint32
     int32_t msgBeg = -1, msgEnd = -1;//<0,表示未初始化
     for (uint32_t i = posBeg; i < posEnd; ++i)
     {
-        if (msgBeg < 0 && CrOrLf(buff[i]) == false)
+        //如果没有找到消息头,要先找消息头
+        if (msgBeg < 0)
         {
-            msgBeg = i;
+            if (CrOrLf(buff[i]) == false)
+                msgBeg = i;
             continue;
         }
         //for循环里面有(i<posEnd),不用担心i超过posEnd的问题,
@@ -324,18 +326,21 @@ void TcpSocket::RecvDataAsync(char* data, uint32_t len, const boost::function<vo
 /*                                                                      */
 /************************************************************************/
 #if 1 //NetConnection
-NetConnection::NetConnection(bool callSignal, RunEnginePtr engine) :m_callSignal(callSignal), m_reconnectInterval(5)
+NetConnection::NetConnection(bool callSignal, RunEnginePtr engine)
+:m_callSignal(callSignal), m_reconnectInterval(5), m_isSending(false), m_isRecving(false)
 {
     m_engine = engine;
     m_socket = TcpSocketPtr(new TcpSocket(m_engine->BaseIo()));
     m_strandSend = m_engine->BaseStrandPtr();
     m_strandRecv = m_engine->BaseStrandPtr();
     m_timer = std::make_shared<boost::asio::steady_timer>(m_engine->BaseIo());
-    DoReset(false, false, false, false);
+    DoReset(false, false, false);
 }
 
-NetConnection::NetConnection(bool callSignal, RunEnginePtr engine, BoostSocketPtr sock) :m_callSignal(callSignal), m_reconnectInterval(5)
+NetConnection::NetConnection(bool callSignal, RunEnginePtr engine, BoostSocketPtr sock)
+:m_callSignal(callSignal), m_reconnectInterval(5), m_isSending(false), m_isRecving(false)
 {
+    //确保RunEngine的BaseIo就是sock使用的io_service,
     assert(&engine->BaseIo() == &sock->get_io_service());
     m_engine = engine;
     m_socket = TcpSocketPtr(new TcpSocket(sock));
@@ -345,12 +350,12 @@ NetConnection::NetConnection(bool callSignal, RunEnginePtr engine, BoostSocketPt
     //如果是自己生成的socket,那就无所谓了,
     //如果是server端accept的socket,那么就需要跳过socket的初始化了,
     //综上,在这个构造函数初始化过程中,socket保持原样的好,
-    DoReset(false, false, false, true);
+    DoReset(false, false, true);
 }
 
 NetConnection::~NetConnection()
 {
-    DoReset(false, false, false, false);
+    DoReset(false, false, false);
     m_engine.reset();
     m_socket.reset();
     m_strandRecv.reset();
@@ -378,12 +383,23 @@ uint16_t NetConnection::RemotePort() const
     return m_remotePort;
 }
 
-int NetConnection::Start(const std::string& peerAddress, uint16_t peerPort)
+//以后,这个类又添加了一些signal的话,
+//如果没有这个函数的话,使用这个类的老代码在清理signal的时候,可能会忘记清理一些signal,
+void NetConnection::ResetSignals()
+{
+    m_onConnected.disconnect_all_slots();
+    m_onDisconnected.disconnect_all_slots();
+    m_onError.disconnect_all_slots();
+    m_onReceivedData.disconnect_all_slots();
+    m_onReceivedMessage.disconnect_all_slots();
+}
+
+int NetConnection::Connect(const std::string& peerAddress, uint16_t peerPort)
 {
     if (m_socket->IsOpen())
     {
         int errorValue = -1;
-        std::string errorMsg = "套接字已打开,请关闭套接字后再启动.";
+        std::string errorMsg = (boost::format("套接字已打开,请关闭套接字后再连接,peerAddr=%1%,peerPort=%2%,") % peerAddress%peerPort).str();
         m_engine->BaseIo().post(boost::bind(&NetConnection::HandleOnError, shared_from_this(), errorValue, errorMsg));
         return errorValue;
     }
@@ -398,19 +414,20 @@ int NetConnection::Start(const std::string& peerAddress, uint16_t peerPort)
     }
 }
 
-int NetConnection::Start()
+//TcpServer accept a socket, and then, StartWithAccept,
+int NetConnection::StartWithAccept()
 {
     if (m_socket->IsOpen() == false)
     {
         int errorValue = -1;
-        std::string errorMsg = "套接字已关闭,无法启动.";
+        std::string errorMsg = "套接字已关闭,没法进行无参启动.";
         m_engine->BaseIo().post(boost::bind(&NetConnection::HandleOnError, shared_from_this(), errorValue, errorMsg));
         return errorValue;
     }
     if (m_peerAddress.empty() == false || m_peerPort)
     {
         int errorValue = -1;
-        std::string errorMsg = "有问题吧?这个函数用于TcpServer在accept之后的启动.";
+        std::string errorMsg = "逻辑错误,套接字已打开,peerAddr和peerPort不为空,却进行无参启动.";
         m_engine->BaseIo().post(boost::bind(&NetConnection::HandleOnError, shared_from_this(), errorValue, errorMsg));
         return errorValue;
     }
@@ -420,7 +437,7 @@ int NetConnection::Start()
 
 void NetConnection::Stop()
 {
-    DoReset(true, false, true, false);
+    DoReset(true, false, false);
 }
 
 uint32_t NetConnection::SendData(const char* data, uint32_t len, bool isSync /* = false */)
@@ -439,73 +456,32 @@ uint32_t NetConnection::SendData(const char* data, uint32_t len, bool isSync /* 
 
 void NetConnection::OnConnected(NetConnectionPtr connection)
 {
-    std::string str = (boost::format("[NetConnection::OnConnected   ],")).str();
+    std::string str = (boost::format("[NetConnection::OnConnected      ],")).str();
     std::cout << str << std::endl;
 }
 
 void NetConnection::OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[NetConnection::OnDisconnected], %|d|, %|s|,") % errorValue%errorMessage).str();
+    std::string str = (boost::format("[NetConnection::OnDisconnected   ], %|d|, [%|s|],") % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void NetConnection::OnError(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[NetConnection::OnError       ], %|d|, %|s|,") % errorValue%errorMessage).str();
+    std::string str = (boost::format("[NetConnection::OnError          ], %|d|, [%|s|],") % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void NetConnection::OnReceivedData(NetConnectionPtr connection, const char* data, uint32_t len)
 {
-    std::string str = (boost::format("[NetConnection::OnReceivedData], %|d|, [%|s|],") % len%data).str();
+    std::string str = (boost::format("[NetConnection::OnReceivedData   ], %|d|, [%|s|],") % len % data).str();
     std::cout << str << std::endl;
 }
 
-void NetConnection::OnReceivedMsg(NetConnectionPtr connection, StdStringPtr message)
+void NetConnection::OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message)
 {
-    std::string str = (boost::format("[NetConnection::OnReceivedMsg ], %|d|, [%|s|],") % message->size() % *message).str();
+    std::string str = (boost::format("[NetConnection::OnReceivedMessage], %|d|, [%|s|],") % message->size() % *message).str();
     std::cout << str << std::endl;
-}
-
-//需要m_isRecving的理由(几乎不可能):接收线程刚刚async_recv了数据,还没进行处理呢,程序就主动close了socket,然后立即进行connect并成功连接了,
-//然后接收线程处理完了,然后开始async_recv,因为socket重新连接成功了,所以接收线程会正常处理,而不是退出,
-//但是重连成功了,自然要重新启动一个接收线程,此时接收线程就有两个了,就会出问题了,
-//m_isRecving和m_isSending,建议只在创建对象时初始化一次,以后就不要再修改了(通过DoReset等),而是让逻辑自行修改,
-void NetConnection::DoReset(bool exceptSignal, bool exceptAddrPort, bool exceptSendRecvFlag, bool exceptSocket)
-{
-    if (!exceptSignal)
-    {
-        m_onConnected.disconnect_all_slots();
-        m_onDisconnected.disconnect_all_slots();
-        m_onError.disconnect_all_slots();
-        m_onReceivedData.disconnect_all_slots();
-        m_onReceivedMessage.disconnect_all_slots();
-    }
-    //m_callSignal,const,不处理
-    //m_reconnectInterval,const,不处理
-    ReflushLocalEndpointAndRemoteEndpoint(false);//DoReset函数只会将它刷成空,要刷新成最新的数据,请手动刷新,
-    //
-    if (!exceptAddrPort)
-    {
-        m_peerAddress = "";
-        m_peerPort = 0;
-    }
-    //
-    if (!exceptSendRecvFlag)
-    {//m_isRecving和m_isSending,建议只在创建对象时初始化一次,以后就不要再修改了(通过DoReset等),而是让逻辑自行修改,
-        m_isSending = false;
-        m_isRecving = false;
-    }
-    //
-    m_bufSend.Reset();
-    m_bufRecv.Reset();
-    //
-    //m_engine是外部送进来的运行发动机,不进行任何处理,
-    if (!exceptSocket)
-        m_socket->Close();
-    //m_strandSend不处理
-    //m_strandRecv不处理
-    m_timer->cancel();
 }
 
 void NetConnection::ReflushLocalEndpointAndRemoteEndpoint(bool regain)
@@ -524,6 +500,35 @@ void NetConnection::ReflushLocalEndpointAndRemoteEndpoint(bool regain)
         m_remoteAddress = "";
         m_remotePort = 0;
     }
+}
+
+//需要m_isRecving的理由(几乎不可能):接收线程刚刚async_recv了数据,还没进行处理呢,程序就主动close了socket,然后立即进行connect并成功连接了,
+//然后接收线程处理完了,然后开始async_recv,因为socket重新连接成功了,所以接收线程会正常处理,而不是退出,
+//但是重连成功了,自然要重新启动一个接收线程,此时接收线程就有两个了,就会出问题了,
+//m_isRecving和m_isSending,建议只在创建对象时初始化一次,以后就不要再修改了(通过DoReset等),而是让逻辑自行修改,
+void NetConnection::DoReset(bool exceptSignal, bool exceptAddrPort, bool exceptSocket)
+{
+    if (!exceptSignal)
+        ResetSignals();
+    //m_callSignal,       const,不处理
+    //m_reconnectInterval,const,不处理
+    ReflushLocalEndpointAndRemoteEndpoint(false);//DoReset函数只会将它刷成空,要刷新成最新的数据,请手动刷新,
+    //
+    if (!exceptAddrPort)
+    {
+        m_peerAddress = "";
+        m_peerPort = 0;
+    }
+    //m_isSending,只在初始化时进行一次赋值,以后都是让逻辑进行修改,不再强行修改其值了,
+    //m_isRecving,只在初始化时进行一次赋值,以后都是让逻辑进行修改,不再强行修改其值了,
+    m_bufSend.Reset();
+    m_bufRecv.Reset();
+    //m_engine是外部送进来的运行发动机,不进行任何处理,
+    if (!exceptSocket)
+        m_socket->Close();
+    //m_strandSend不处理
+    //m_strandRecv不处理
+    m_timer->cancel();
 }
 
 void NetConnection::DoConnect(const boost::system::error_code& ec)
@@ -567,7 +572,7 @@ void NetConnection::DoConnect(const boost::system::error_code& ec)
 
 void NetConnection::DoConnectedEvent()
 {
-    DoReset(true, true, true, true);
+    DoReset(true, true, true);
     ReflushLocalEndpointAndRemoteEndpoint(true);
     RunRecvDataEvent();
     m_engine->BaseIo().post(boost::bind(&NetConnection::HandleOnConnected, shared_from_this()));
@@ -576,7 +581,7 @@ void NetConnection::DoConnectedEvent()
 //因为某些原因,需要执行断开操作,
 void NetConnection::DoDisconnectedEvent(int errorValue, const std::string& errorMsg)
 {
-    DoReset(true, true, true, false);
+    DoReset(true, true, false);
     ReflushLocalEndpointAndRemoteEndpoint(false);
     m_engine->BaseIo().post(boost::bind(&NetConnection::HandleOnDisconnected, shared_from_this(), errorValue, errorMsg));
     //断线重连
@@ -763,7 +768,7 @@ void NetConnection::HandleOnReceivedMessage(StdStringPtr message)
     if (m_callSignal)
         m_onReceivedMessage(shared_from_this(), message);
     else
-        OnReceivedMsg(shared_from_this(), message);
+        OnReceivedMessage(shared_from_this(), message);
 }
 #endif//NetConnection
 /************************************************************************/
@@ -783,12 +788,7 @@ void NetConnectionManager::Reset()
     for (auto& node : m_set)
     {
         node->Stop();
-        //
-        node->m_onConnected.disconnect_all_slots();
-        node->m_onDisconnected.disconnect_all_slots();
-        node->m_onError.disconnect_all_slots();
-        node->m_onReceivedData.disconnect_all_slots();
-        node->m_onReceivedMessage.disconnect_all_slots();
+        node->ResetSignals();
     }
     m_set.clear();
 }
@@ -821,28 +821,14 @@ TcpClient::TcpClient(uint16_t numBase, uint16_t numDeal) :m_myEngine(true)
     m_engine = RunEnginePtr(new RunEngine);
     m_engine->Start(numBase, numDeal);
     m_connection = std::make_shared<NetConnection>(true, m_engine);
-    if (true)
-    {
-        m_connection->m_onConnected.connect(boost::bind(&TcpClient::OnConnected, this, _1));
-        m_connection->m_onDisconnected.connect(boost::bind(&TcpClient::OnDisconnected, this, _1, _2, _3));
-        m_connection->m_onError.connect(boost::bind(&TcpClient::OnError, this, _1, _2, _3));
-        m_connection->m_onReceivedData.connect(boost::bind(&TcpClient::OnReceivedData, this, _1, _2, _3));
-        m_connection->m_onReceivedMessage.connect(boost::bind(&TcpClient::OnReceivedMessage, this, _1, _2));
-    }
+    DoConnectSignals();
 }
 
 TcpClient::TcpClient(RunEnginePtr engine) :m_myEngine(false)
 {
     m_engine = engine;
     m_connection = NetConnectionPtr(new NetConnection(true, m_engine));
-    if (true)
-    {
-        m_connection->m_onConnected.connect(boost::bind(&TcpClient::OnConnected, this, _1));
-        m_connection->m_onDisconnected.connect(boost::bind(&TcpClient::OnDisconnected, this, _1, _2, _3));
-        m_connection->m_onError.connect(boost::bind(&TcpClient::OnError, this, _1, _2, _3));
-        m_connection->m_onReceivedData.connect(boost::bind(&TcpClient::OnReceivedData, this, _1, _2, _3));
-        m_connection->m_onReceivedMessage.connect(boost::bind(&TcpClient::OnReceivedMessage, this, _1, _2));
-    }
+    DoConnectSignals();
 }
 
 TcpClient::~TcpClient()
@@ -850,14 +836,7 @@ TcpClient::~TcpClient()
     if (m_myEngine)
         m_engine->Stop();
     m_connection->Stop();
-    if (true)
-    {
-        m_connection->m_onConnected.disconnect_all_slots();
-        m_connection->m_onDisconnected.disconnect_all_slots();
-        m_connection->m_onError.disconnect_all_slots();
-        m_connection->m_onReceivedData.disconnect_all_slots();
-        m_connection->m_onReceivedMessage.disconnect_all_slots();
-    }
+    //m_connection->ResetSignals();
     m_engine.reset();
     m_connection.reset();
 }
@@ -882,14 +861,14 @@ uint16_t TcpClient::RemotePort() const
     return m_connection->RemotePort();
 }
 
-void TcpClient::Reset()
-{
-    m_connection->Stop();
-}
-
 int TcpClient::Connect(const std::string& peerAddress, uint16_t peerPort)
 {
-    return m_connection->Start(peerAddress, peerPort);
+    return m_connection->Connect(peerAddress, peerPort);
+}
+
+void TcpClient::Stop()
+{
+    m_connection->Stop();
 }
 
 uint32_t TcpClient::SendData(const char* data, uint32_t len, bool isSync /* = false */)
@@ -899,32 +878,41 @@ uint32_t TcpClient::SendData(const char* data, uint32_t len, bool isSync /* = fa
 
 void TcpClient::OnConnected(NetConnectionPtr connection)
 {
-    std::string str = (boost::format("[TcpClient::OnConnected   ], %|p|,") % connection.get()).str();
+    std::string str = (boost::format("[TcpClient::OnConnected      ], %|p|,") % connection.get()).str();
     std::cout << str << std::endl;
 }
 
 void TcpClient::OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[TcpClient::OnDisconnected], %|p|, %|d|, %|s|,") % connection.get() % errorValue%errorMessage).str();
+    std::string str = (boost::format("[TcpClient::OnDisconnected   ], %|p|, %|d|, [%|s|],") % connection.get() % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void TcpClient::OnError(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[TcpClient::OnError       ], %|p|, %|d|, %|s|,") % connection.get() % errorValue%errorMessage).str();
+    std::string str = (boost::format("[TcpClient::OnError          ], %|p|, %|d|, [%|s|],") % connection.get() % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void TcpClient::OnReceivedData(NetConnectionPtr connection, const char* data, uint32_t len)
 {
-    std::string str = (boost::format("[TcpClient::OnReceivedData], %|p|, %|d|, [%|s|],") % connection.get() % len%data).str();
+    std::string str = (boost::format("[TcpClient::OnReceivedData   ], %|p|, %|d|, [%|s|],") % connection.get() % len % data).str();
     std::cout << str << std::endl;
 }
 
 void TcpClient::OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message)
 {
-    std::string str = (boost::format("[TcpClient::OnReceivedMsg ], %|p|, %|d|, [%|s|],") % connection.get() % message->size() % *message).str();
+    std::string str = (boost::format("[TcpClient::OnReceivedMessage], %|p|, %|d|, [%|s|],") % connection.get() % message->size() % *message).str();
     std::cout << str << std::endl;
+}
+
+void TcpClient::DoConnectSignals()
+{
+    m_connection->m_onConnected.connect(boost::bind(&TcpClient::OnConnected, this, _1));
+    m_connection->m_onDisconnected.connect(boost::bind(&TcpClient::OnDisconnected, this, _1, _2, _3));
+    m_connection->m_onError.connect(boost::bind(&TcpClient::OnError, this, _1, _2, _3));
+    m_connection->m_onReceivedData.connect(boost::bind(&TcpClient::OnReceivedData, this, _1, _2, _3));
+    m_connection->m_onReceivedMessage.connect(boost::bind(&TcpClient::OnReceivedMessage, this, _1, _2));
 }
 #endif//TcpClient
 /************************************************************************/
@@ -932,14 +920,14 @@ void TcpClient::OnReceivedMessage(NetConnectionPtr connection, StdStringPtr mess
 /************************************************************************/
 #if 1 //TcpAcceptor
 TcpAcceptor::TcpAcceptor(bool callSignal, boost::asio::io_service& io)
-:m_callSignal(callSignal), m_acceptor(io)
+:m_callSignal(callSignal), m_acceptor(io), m_isAccepting(false)
 {
-    DoReset(false, false);
+    DoReset(false);
 }
 
 TcpAcceptor::~TcpAcceptor()
 {
-    DoReset(false, false);
+    DoReset(false);
 }
 
 bool TcpAcceptor::IsOpen() const
@@ -952,12 +940,18 @@ boost::asio::ip::tcp::endpoint TcpAcceptor::LocalEndpoint() const
     return m_acceptor.local_endpoint();
 }
 
-void TcpAcceptor::Stop()
+void TcpAcceptor::ResetSignals()
 {
-    DoReset(true, true);
+    m_onAccepted.disconnect_all_slots();
+    m_onError.disconnect_all_slots();
 }
 
-int TcpAcceptor::Start(const std::string& address, uint16_t port, uint16_t backlog)
+void TcpAcceptor::Stop()
+{
+    DoReset(true);
+}
+
+int TcpAcceptor::Accept(const std::string& address, uint16_t port, uint16_t backlog)
 {
     if (IsOpen())
     {
@@ -966,9 +960,14 @@ int TcpAcceptor::Start(const std::string& address, uint16_t port, uint16_t backl
         m_acceptor.get_io_service().post(boost::bind(&TcpAcceptor::HandleOnError, shared_from_this(), errorValue, errorMsg));
         return errorValue;
     }
-    boost::asio::ip::address addr = boost::asio::ip::address::from_string(address);
-    boost::asio::ip::tcp::endpoint ep(addr, port);
     boost::system::error_code ec;
+    boost::asio::ip::address addr = boost::asio::ip::address::from_string(address, ec);
+    if (ec)
+    {
+        m_acceptor.get_io_service().post(boost::bind(&TcpAcceptor::HandleOnError, shared_from_this(), ec.value(), ec.message()));
+        return ec.value();
+    }
+    boost::asio::ip::tcp::endpoint ep(addr, port);
     if (m_acceptor.open(ep.protocol(), ec))
     {
         m_acceptor.get_io_service().post(boost::bind(&TcpAcceptor::HandleOnError, shared_from_this(), ec.value(), ec.message()));
@@ -996,23 +995,14 @@ void TcpAcceptor::OnAccepted(TcpAcceptorPtr acceptor, BoostSocketPtr boostSocket
 
 void TcpAcceptor::OnError(TcpAcceptorPtr acceptor, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[TcpAcceptor::OnError   ], %|p|, %|d|, %|s|,") % acceptor.get() % errorValue%errorMessage).str();
+    std::string str = (boost::format("[TcpAcceptor::OnError   ], %|p|, %|d|, [%|s|],") % acceptor.get() % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
-void TcpAcceptor::DoReset(bool exceptSignal, bool exceptAcceptFlag)
+void TcpAcceptor::DoReset(bool exceptSignal)
 {
-    if (!exceptSignal)
-    {
-        m_onAccepted.disconnect_all_slots();
-        m_onError.disconnect_all_slots();
-    }
     //m_callSignal,const,不处理,
     m_acceptor.close();
-    if (!exceptAcceptFlag)
-    {
-        m_isAccepting = false;
-    }
 }
 
 void TcpAcceptor::DoAcceptSocketEvent()
@@ -1044,7 +1034,7 @@ void TcpAcceptor::DoAcceptSocket(boost::asio::yield_context yield)
         {
             m_isAccepting = false;
             m_acceptor.get_io_service().post(boost::bind(&TcpAcceptor::HandleOnError, shared_from_this(), ec.value(), ec.message()));
-            DoReset(true, true);
+            DoReset(true);
             break;
         }
         m_acceptor.get_io_service().post(boost::bind(&TcpAcceptor::HandleOnAccepted, shared_from_this(), boostSocket));
@@ -1077,7 +1067,7 @@ TcpServer::TcpServer(uint16_t numBase, uint16_t numDeal) :m_myEngine(true)
 	m_engine = std::make_shared<RunEngine>();
 	m_engine->Start(numBase, numDeal);
 	m_acceptor = std::make_shared<TcpAcceptor>(true, m_engine->BaseIo());
-    SignalsConnOrDisconn(true);
+    DataMemSignalsConnOrDisconn(true);
 	m_manager = NetConnectionManagerPtr(new NetConnectionManager());
 }
 
@@ -1085,14 +1075,14 @@ TcpServer::TcpServer(RunEnginePtr engine) :m_myEngine(false)
 {
 	m_engine = engine;
 	m_acceptor = std::make_shared<TcpAcceptor>(true, m_engine->BaseIo());
-    SignalsConnOrDisconn(true);
+    DataMemSignalsConnOrDisconn(true);
 	m_manager = std::make_shared<NetConnectionManager>();
 }
 
 TcpServer::~TcpServer()
 {
-    SignalsConnOrDisconn(false);
-    Reset();
+    DataMemSignalsConnOrDisconn(false);
+    DoReset();
     m_acceptor.reset();
     m_manager.reset();
 }
@@ -1107,57 +1097,48 @@ uint16_t TcpServer::LocalPort() const
     return m_localPort;
 }
 
-void TcpServer::Reset()
-{
-    ReflushLocalEndpoint(false);
-    //m_myEngine
-    //m_engine
-    m_acceptor->Stop();
-    m_manager->Reset();
-}
-
-int TcpServer::Accept(const std::string& address, uint16_t port, int backlog)
-{
-    return m_acceptor->Start(address, port, backlog);
-}
-
 bool TcpServer::IsOpen() const
 {
     return m_acceptor->IsOpen();
 }
 
+int TcpServer::Accept(const std::string& address, uint16_t port, int backlog)
+{
+    return m_acceptor->Accept(address, port, backlog);
+}
+
 void TcpServer::Close()
 {
-    Reset();
+    DoReset();
 }
 
 void TcpServer::OnConnected(NetConnectionPtr connection)
 {
-    std::string str = (boost::format("[TcpServer::OnConnected   ], %|p|,") % connection.get()).str();
+    std::string str = (boost::format("[TcpServer::OnConnected      ], %|p|,") % connection.get()).str();
     std::cout << str << std::endl;
 }
 
 void TcpServer::OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[TcpServer::OnDisconnected], %|p|, %|d|, %|s|,") % connection.get() % errorValue%errorMessage).str();
+    std::string str = (boost::format("[TcpServer::OnDisconnected   ], %|p|, %|d|, [%|s|],") % connection.get() % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void TcpServer::OnError(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
 {
-    std::string str = (boost::format("[TcpServer::OnError       ], %|p|, %|d|, %|s|,") % connection.get() % errorValue%errorMessage).str();
+    std::string str = (boost::format("[TcpServer::OnError          ], %|p|, %|d|, [%|s|],") % connection.get() % errorValue % errorMessage).str();
     std::cout << str << std::endl;
 }
 
 void TcpServer::OnReceivedData(NetConnectionPtr connection, const char* data, uint32_t len)
 {
-    std::string str = (boost::format("[TcpServer::OnReceivedData], %|p|, %|d|, [%|s|],") % connection.get() % len%data).str();
+    std::string str = (boost::format("[TcpServer::OnReceivedData   ], %|p|, %|d|, [%|s|],") % connection.get() % len % data).str();
     std::cout << str << std::endl;
 }
 
 void TcpServer::OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message)
 {
-    std::string str = (boost::format("[TcpServer::OnReceivedMsg ], %|p|, %|d|, [%|s|],") % connection.get() % message->size() % *message).str();
+    std::string str = (boost::format("[TcpServer::OnReceivedMessage], %|p|, %|d|, [%|s|],") % connection.get() % message->size() % *message).str();
     std::cout << str << std::endl;
 }
 
@@ -1175,7 +1156,7 @@ void TcpServer::ReflushLocalEndpoint(bool regain)
     }
 }
 
-void TcpServer::SignalsConnOrDisconn(bool isConnect)
+void TcpServer::DataMemSignalsConnOrDisconn(bool isConnect)
 {
     if (isConnect)
     {
@@ -1189,24 +1170,47 @@ void TcpServer::SignalsConnOrDisconn(bool isConnect)
     }
 }
 
+void TcpServer::DoReset()
+{
+    ReflushLocalEndpoint(false);
+    //m_myEngine
+    //m_engine
+    m_acceptor->Stop();
+    m_manager->Reset();
+}
+
 void TcpServer::DoOnAcceptedSocket(BoostSocketPtr boostSocket)
 {
     NetConnectionPtr conn = std::make_shared<NetConnection>(true, m_engine, boostSocket);
     if (true)
     {
-        conn->m_onConnected.connect(boost::bind(&TcpServer::OnConnected, /*shared_from_this()*/this, _1));
-        conn->m_onDisconnected.connect(boost::bind(&TcpServer::OnDisconnected, /*shared_from_this()*/this, _1, _2, _3));
+        conn->m_onConnected.connect(boost::bind(&TcpServer::HandleOnConnected, /*shared_from_this()*/this, _1));
+        conn->m_onDisconnected.connect(boost::bind(&TcpServer::HandleOnDisconnected, /*shared_from_this()*/this, _1, _2, _3));
         conn->m_onError.connect(boost::bind(&TcpServer::OnError, /*shared_from_this()*/this, /*_1*/nullptr, _2, _3));
         conn->m_onReceivedData.connect(boost::bind(&TcpServer::OnReceivedData, /*shared_from_this()*/this, _1, _2, _3));
         conn->m_onReceivedMessage.connect(boost::bind(&TcpServer::OnReceivedMessage, /*shared_from_this()*/this, _1, _2));
     }
     m_manager->Insert(conn);
-    if (conn->Start() != 0)
+    if (conn->StartWithAccept() != 0)
     {
+        conn->Stop();
         int errorValue = -1;
         std::string errorMessage = "accept了一个socket,然后Start失败了.";
         m_engine->BaseIo().post(boost::bind(&TcpServer::OnError, shared_from_this(), conn, errorValue, errorMessage));
     }
+}
+
+void TcpServer::HandleOnConnected(NetConnectionPtr connection)
+{
+    //m_manager->Insert(connection);
+    OnConnected(connection);
+}
+
+void TcpServer::HandleOnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage)
+{
+    connection->Stop();
+    m_manager->Erase(connection);
+    OnDisconnected(connection, errorValue, errorMessage);
 }
 
 #endif//TcpServer

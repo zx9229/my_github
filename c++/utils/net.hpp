@@ -126,19 +126,20 @@ public:
     uint16_t    LocalPort() const;
     const char* RemoteAddress() const;
     uint16_t    RemotePort() const;
-    int Start(const std::string& peerAddress, uint16_t peerPort);
-    int Start();
+    void ResetSignals();
+    int Connect(const std::string& peerAddress, uint16_t peerPort);
+    int StartWithAccept();
     void Stop();
     uint32_t SendData(const char* data, uint32_t len, bool isSync = false);
 public:
     virtual void OnConnected(NetConnectionPtr connection);
-    virtual void OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMsg);
-    virtual void OnError(NetConnectionPtr connection, int errorValue, const std::string& errorMsg);
+    virtual void OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage);
+    virtual void OnError(NetConnectionPtr connection, int errorValue, const std::string& errorMessage);
     virtual void OnReceivedData(NetConnectionPtr connection, const char* data, uint32_t len);
-    virtual void OnReceivedMsg(NetConnectionPtr connection, StdStringPtr msg);
+    virtual void OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message);
 private:
-    void DoReset(bool exceptSignal, bool exceptAddrPort, bool exceptSendRecvFlag, bool exceptSocket);
     void ReflushLocalEndpointAndRemoteEndpoint(bool regain);
+    void DoReset(bool exceptSignal, bool exceptAddrPort, bool exceptSocket);
     void DoConnect(const boost::system::error_code& ec);
     void DoConnectedEvent();
     void DoDisconnectedEvent(int errorValue, const std::string& errorMsg);
@@ -170,8 +171,8 @@ private:
     std::string m_peerAddress;
     uint16_t    m_peerPort;
     //
-    bool m_isSending;
-    bool m_isRecving;
+    boost::atomic_bool m_isSending;
+    boost::atomic_bool m_isRecving;
     SendBuffer m_bufSend;
     RecvBuffer m_bufRecv;
     //
@@ -215,8 +216,8 @@ public:
     uint16_t    LocalPort() const;
     const char* RemoteAddress() const;
     uint16_t    RemotePort() const;
-    void Reset();
     int Connect(const std::string& peerAddress, uint16_t peerPort);
+    void Stop();
     uint32_t SendData(const char* data, uint32_t len, bool isSync = false);
     virtual void OnConnected(NetConnectionPtr connection);
     virtual void OnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage);
@@ -224,6 +225,7 @@ public:
     virtual void OnReceivedData(NetConnectionPtr connection, const char* data, uint32_t len);
     virtual void OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message);
 private:
+    void DoConnectSignals();
     const bool m_myEngine;
     RunEnginePtr m_engine;
     NetConnectionPtr m_connection;
@@ -241,12 +243,13 @@ public:
 public:
     bool IsOpen() const;
     boost::asio::ip::tcp::endpoint LocalEndpoint() const;
+    void ResetSignals(); 
     void Stop();
-    int Start(const std::string& address, uint16_t port, uint16_t backlog);
+    int Accept(const std::string& address, uint16_t port, uint16_t backlog);
     void OnAccepted(TcpAcceptorPtr acceptor, BoostSocketPtr boostSocket);
     void OnError(TcpAcceptorPtr acceptor, int errorValue, const std::string& errorMessage);
 private:
-    void DoReset(bool exceptSignal, bool exceptAcceptFlag);
+    void DoReset(bool exceptSignal);
     void DoAcceptSocketEvent();
     void DoAcceptSocket(boost::asio::yield_context yield);
     void HandleOnAccepted(BoostSocketPtr boostSocket);
@@ -257,7 +260,7 @@ public:
 private:
     const bool m_callSignal;
     boost::asio::ip::tcp::acceptor m_acceptor;
-    bool m_isAccepting;
+    boost::atomic_bool m_isAccepting;
 };
 /************************************************************************/
 /*                                                                      */
@@ -274,7 +277,6 @@ public:
     const char* LocalAddress() const;
     uint16_t    LocalPort() const;
     bool IsOpen() const;
-    void Reset();
     int Accept(const std::string& address, uint16_t port, int backlog);
     void Close();
     virtual void OnConnected(NetConnectionPtr connection);
@@ -284,8 +286,11 @@ public:
     virtual void OnReceivedMessage(NetConnectionPtr connection, StdStringPtr message);
 private:
     void ReflushLocalEndpoint(bool regain);
-    void SignalsConnOrDisconn(bool isConnect);
+    void DataMemSignalsConnOrDisconn(bool isConnect);
+    void DoReset();
     void DoOnAcceptedSocket(BoostSocketPtr sock);
+    void HandleOnConnected(NetConnectionPtr connection);
+    void HandleOnDisconnected(NetConnectionPtr connection, int errorValue, const std::string& errorMessage);
 private:
     std::string m_localAddress;
     uint16_t    m_localPort;
