@@ -1,20 +1,27 @@
 #!/bin/bash
+# Usage: unpkg file
+# Examples:
+#   unpkg a.7z
+#
+# Usage参考了whereis的格式, Examples参考了cat的格式.
+# 建议将脚本匹配到路径"/usr/local/bin/unpkg", 然后"chmod +x unpkg".
+# 简介:
+#   脚本的第一个入参是一个文件名,该文件是一个压缩包,其后缀表示了这个压缩包的类型,
+#   脚本根据后缀猜测这个文件的解压命令,然后执行此命令尝试解压这个文件,然后打印出来这个解压命令供使用者查看.
 
-# 建议匹配到路径"/usr/local/bin/unpkg", 然后"chmod +x unpkg".
-EXECUTABLENAME=$0
 ARRTAG=([0]=".tar.gz"   [1]=".tar.bz2"  [2]=".tar"      [3]=".gz"     [4]=".Z"          [5]=".7z"    [6]=".rar"     [7]=".zip"  )
 ARRCMD=([0]="tar -xzf " [1]="tar -xjf " [2]="tar -xvf " [3]="gunzip " [4]="uncompress " [5]="7za x " [6]="unrar e " [7]="unzip ")
 
 GetCmdIdx()
 {
     local fullName=${1}
-    local baseName=""
-    local suffix=""
+    local baseName=  # 参见"Shell十三问",设定为"空值"(null value).
+    local suffix=
     
-    for((i=0;i<${#ARRTAG[*]};++i)); do
+    for((i=0;i<${#ARRTAG[@]};++i)); do  # 参见"Shell十三问","$@ 与 $* 差在哪"
         suffix=${ARRTAG[${i}]}
-        baseName=${fullName%${suffix}*}  # 参见"Shell十三问"
-        if [ "${baseName}${suffix}" == "${fullName}" ]; then
+        baseName=${fullName%${suffix}*}  # 参见"Shell十三问","$(( )) 与 $( ) 还有${ } 差在哪".
+        if [ "${baseName}${suffix}" == "${fullName}" ]; then  # 参见"Shell十三问","&& 与 || 差在哪".
             return ${i}
         fi
     done
@@ -25,10 +32,10 @@ GetCmdIdx()
 DecompressionFile()
 {
     local fileName=${1}
-    GetCmdIdx ${fileName}
+    GetCmdIdx "${fileName}"
     local cmdIdx=$?
-    if ((${#ARRTAG[*]} <= ${cmdIdx})); then
-        echo ${EXECUTABLENAME}" FAIL(unrecognized archive), fileName=["${fileName}"]."
+    if ((${#ARRTAG[@]} <= ${cmdIdx})); then
+        echo ${0}" FAIL(unrecognized archive), fileName=["${fileName}"]."
         return 255
     fi
     
@@ -39,15 +46,15 @@ DecompressionFile()
     if [ ${retVal} -eq 0 ]; then
         retMsg="SUCCESS"
     fi
-    echo ${EXECUTABLENAME}" "${retMsg}"(decompression), cmd=["${cmd}${fileName}"]."
+    echo ${0}" "${retMsg}"(decompression), cmd=["${cmd}${fileName}"]."
     
     return ${retVal}
 }
 
 
 if [ $# -lt 1 ]; then
-    echo ${EXECUTABLENAME}" FAIL(no parameters)."
-    exit 255
+    echo "Usage: ${0} file"
+    exit 0
 fi
 
-DecompressionFile $1
+DecompressionFile "$1"  # 参见"Shell十三问",【" "(双引号) 与 ' '(单引号)差在哪】.
