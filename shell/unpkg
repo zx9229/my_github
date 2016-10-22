@@ -2,8 +2,8 @@
 
 # 建议匹配到路径"/usr/local/bin/unpkg", 然后"chmod +x unpkg".
 EXECUTABLENAME=$0
-ARRTAG=([0]=".tar.gz"   [1]=".tar.bz2"  [2]=".gz"     [3]=".tar"      [4]=".Z"          [5]=".rar"     [6]=".7z"    [7]=".zip"  )
-ARRCMD=([0]="tar -xzf " [1]="tar -xjf " [2]="gunzip " [3]="tar -xvf " [4]="uncompress " [5]="unrar e " [6]="7za x " [7]="unzip ")
+ARRTAG=([0]=".tar.gz"   [1]=".tar.bz2"  [2]=".tar"      [3]=".gz"     [4]=".Z"          [5]=".7z"    [6]=".rar"     [7]=".zip"  )
+ARRCMD=([0]="tar -xzf " [1]="tar -xjf " [2]="tar -xvf " [3]="gunzip " [4]="uncompress " [5]="7za x " [6]="unrar e " [7]="unzip ")
 
 GetCmdIdx()
 {
