@@ -26,9 +26,9 @@ DecompressionFile()
 {
     local fileName=${1}
     GetCmdIdx ${fileName}
-    local idx=$?
-    if ((${#ARRTAG[*]} <= ${idx})); then
-        echo ${EXECUTABLENAME}" FAIL(unrecognized archive), fileName="${fileName}
+    local cmdIdx=$?
+    if ((${#ARRTAG[*]} <= ${cmdIdx})); then
+        echo ${EXECUTABLENAME}" FAIL(unrecognized archive), fileName=["${fileName}"]."
         return 255
     fi
     
