@@ -40,13 +40,13 @@ DecompressionFile()
     fi
     
     local cmd=${ARRCMD[${cmdIdx}]}
-    ${cmd} ${fileName}
+    ${cmd} "${fileName}"
     local retVal=$?
     local retMsg="FAIL"
     if [ ${retVal} -eq 0 ]; then
         retMsg="SUCCESS"
     fi
-    echo ${0}" "${retMsg}"(decompression), cmd=["${cmd}${fileName}"]."
+    echo ${0}" "${retMsg}"(decompression), cmd=["${cmd}\"${fileName}\""]."
     
     return ${retVal}
 }
