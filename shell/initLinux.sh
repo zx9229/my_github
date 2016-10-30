@@ -12,6 +12,7 @@ zoneInfoFilePath="/usr/share/zoneinfo/Asia/Shanghai"
 # 增加一个用户,并且更新这个用户的密码(无依赖).
 AddUserAndUpdatePassword()
 {
+    echo "=> AddUserAndUpdatePassword, begin..."
     local userName="$1"
     local userPassword="$2"
     local gidGroup="$3"
@@ -58,13 +59,14 @@ AddUserAndUpdatePassword()
         return 1
     fi
     
-    echo "=> success. userName(${userName}), gidGroup(${gidGroup}), userdelPermission(${userdelPermission})."
+    echo "=> AddUserAndUpdatePassword, success. userName(${userName}), gidGroup(${gidGroup}), userdelPermission(${userdelPermission})."
     return 0
 }
 
 # 禁止root用户远程登录(无依赖).
 ForbidRootLogin()
 {
+    echo "=> ForbidRootLogin, begin..."
     # -f filename,文件为普通文件则返回0,可以在命令行下[ -f /etc/passwd ]然后 echo $? 测试,可以"man test"查看更多详情.
     local fileName="/etc/ssh/sshd_config"
     if [ ! -f ${fileName} ]; then
@@ -72,19 +74,39 @@ ForbidRootLogin()
         return 1
     fi
     
-    local cntYes=$(sed -r -n "s/^[ \t]*PermitRootLogin[ \t]+yes[ \t#]*.*$/PermitRootLogin no/p" "${fileName}" | wc -l)
-    local cntNo=$(grep -E --count --regexp="^[ \t]*PermitRootLogin[ \t]+no[ \t#]*.*$"           "${fileName}")
-    if   [ ${cntYes} -eq 0 ] && [ ${cntNo} -eq 1 ]; then
+    local regexpTmp="^[# \t]*PermitRootLogin[ \t]+yes[ \t#]*.*$"
+    local regexpYes="^[ \t]*PermitRootLogin[ \t]+yes[ \t#]*.*$"
+    local regexpNo="^[ \t]*PermitRootLogin[ \t]+no[ \t#]*.*$"
+    local cntTmp=$(sed -r -n "s/${regexpTmp}/PermitRootLogin no/p" "${fileName}" | wc -l)
+    local cntYes=$(sed -r -n "s/${regexpYes}/PermitRootLogin no/p" "${fileName}" | wc -l)
+    local cntNo=$(grep -E --count --regexp="${regexpNo}"           "${fileName}")
+    if   [ ${cntNo} -eq 1 ] &&   [ ${cntYes} -eq 0 ]; then
         echo "PermitRootLogin_no, will do nothing."
-    elif [ ${cntYes} -eq 1 ] && [ ${cntNo} -eq 0 ]; then
+    elif [ ${cntNo} -eq 0 ] && ( [ ${cntYes} -eq 1 ] || [ ${cntTmp} -eq 1 ] ); then
         echo "PermitRootLogin_yes, will forbid it."
-        # 将"PermitRootLogin yes"这一行替换为"PermitRootLogin no"这一行.
-        sed -r -i "s/^[ \t]*PermitRootLogin[ \t]+yes[ \t#]*.*$/PermitRootLogin no/g" "${fileName}"
+        
+        local regexpSrc=
+        if   [ ${cntYes} -eq 1 ]; then
+            regexpSrc=${regexpYes}
+        elif [ ${cntTmp} -eq 1 ]; then
+            regexpSrc=${regexpTmp}
+        else
+            echo "logic error, will terminate."
+            return 1
+        fi
+        
+        # 将"PermitRootLogin yes"或"#PermitRootLogin yes"这一行替换为"PermitRootLogin no"这一行.
+        sed -r -i "s/${regexpSrc}/PermitRootLogin no/g" "${fileName}"
         if [ $? -ne 0 ]; then
             echo "fileName(${fileName}) was modified failed. will terminate."
             return 1
         else
-            : # echo "fileName(${fileName}) was modified successfully."
+            cntNo=$(grep -E --count --regexp="${regexpNo}" "${fileName}")
+            if [ ${cntNo} -eq 1 ]; then
+                echo "fileName(${fileName}) was modified, but cntNo=${cntNo}, logic error, will terminate."
+                return 1
+            fi
+            # echo "fileName(${fileName}) was modified successfully."
         fi
         
         service sshd restart
@@ -99,7 +121,7 @@ ForbidRootLogin()
         return 1
     fi
     
-    echo "=> success. ForbidRootLogin."
+    echo "=> ForbidRootLogin, success."
     return 0
 }
 
@@ -138,6 +160,7 @@ VisudoCheck()
 # 给一个用户增加最高的sudo权限(依赖 VisudoCheck 函数).
 AddSudoPermission()
 {
+    echo "=> AddSudoPermission, begin..."
     local fileName="$1"
     local userName="$2"
     local rootExactPattern='^[ \t]*root[ \t]+ALL=\(ALL\)[ \t]+ALL[ \t]*$'
@@ -204,13 +227,14 @@ AddSudoPermission()
         fi
     fi
     
-    echo "=> success. AddSudoPermission, userName(${userName})"
+    echo "=> AddSudoPermission, success. userName(${userName})."
     return 0
 }
 
 # 修改时区,校准时间(无依赖).
 ChangeTimeZoneAndSetDateTime()
 {
+    echo "=> ChangeTimeZoneAndSetDateTime, begin..."
     local zoneInfoFilePath="$1"
     # cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
     \cp -f "${zoneInfoFilePath}" "/etc/localtime"
@@ -229,7 +253,7 @@ ChangeTimeZoneAndSetDateTime()
         return 1
     fi
     
-    echo "=> success. ChangeTimeZoneAndSetDateTime."
+    echo "=> ChangeTimeZoneAndSetDateTime, success."
     return 0
 }
 
