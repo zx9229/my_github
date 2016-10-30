@@ -3,6 +3,9 @@
 # Examples:
 #   unpkg a.7z
 #
+# Download p7zip: wget https://sourceforge.net/projects/p7zip/files/p7zip/16.02/p7zip_16.02_x86_linux_bin.tar.bz2
+# Download p7zip: wget https://sourceforge.net/projects/p7zip/files/p7zip/16.02/p7zip_16.02_src_all.tar.bz2
+#
 # Usage参考了whereis的格式, Examples参考了cat的格式.
 # 建议将脚本匹配到路径"/usr/local/bin/unpkg", 然后"chmod +x unpkg".
 # 简介:
