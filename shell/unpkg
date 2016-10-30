@@ -3,8 +3,12 @@
 # Examples:
 #   unpkg a.7z
 #
-# Download p7zip: wget https://sourceforge.net/projects/p7zip/files/p7zip/16.02/p7zip_16.02_x86_linux_bin.tar.bz2
+# 安装一些包(uncompress在ncompress里): yum -y install bzip2 ncompress unzip
+# RAR 5.40 for Linux:     wget http://www.rarlab.com/rar/rarlinux-5.4.0.tar.gz
+# RAR 5.40 for Linux x64: wget http://www.rarlab.com/rar/rarlinux-x64-5.4.0.tar.gz
+# 源码安装p7zip: yum -y install make gcc gcc-c++ ;  make && make test && make install
 # Download p7zip: wget https://sourceforge.net/projects/p7zip/files/p7zip/16.02/p7zip_16.02_src_all.tar.bz2
+# Download p7zip: wget https://sourceforge.net/projects/p7zip/files/p7zip/16.02/p7zip_16.02_x86_linux_bin.tar.bz2
 #
 # Usage参考了whereis的格式, Examples参考了cat的格式.
 # 建议将脚本匹配到路径"/usr/local/bin/unpkg", 然后"chmod +x unpkg".
