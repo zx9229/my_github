@@ -102,7 +102,7 @@ ForbidRootLogin()
             return 1
         else
             cntNo=$(grep -E --count --regexp="${regexpNo}" "${fileName}")
-            if [ ${cntNo} -eq 1 ]; then
+            if [ ${cntNo} -ne 1 ]; then
                 echo "fileName(${fileName}) was modified, but cntNo=${cntNo}, logic error, will terminate."
                 return 1
             fi
