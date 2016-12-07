@@ -1,0 +1,10 @@
+<logging>
+    <handlers>
+        <handler name="filelog"       class="logging.handlers.TimedRotatingFileHandler" >
+            <param name="filename" value="D:/BasicData/BasicDataProducer_log/Basic_Data_Producer_log" description="例:%Y-%m-%d_%H-%M-%S" />
+            <param name="when"     value="midnight" />
+            <property  name="level"     value="DEBUG"  />
+            <property name="formatter" value="[%(asctime)s %(levelname)s %(name)s %(thread)d] %(message)s" />
+        </handler>
+    </handlers>
+</logging>
