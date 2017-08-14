@@ -8,7 +8,11 @@
 //////////////////////////////////////////////////////////////////////////
 
 
-template<typename K, typename V> class MapStore;//友元类,提前声明.
+//C++标准之所以定义友元类,是因为某些特定场景,在不用友元类的情况下,用正规方式是无法实现的.
+//在本例,我可以使用奇技淫巧: 在MapStore里面用"const_cast<std::map<K, V>&>(newPtr->data())"然后修改map中的值.
+//在我看来,它和"reinterpret_cast<std::map<K, V>*>((char*)(newPtr.get()) + 8)"一样危险.
+//类似的奇技淫巧可以达到目的,但是风险很大.不用友元类,又能使用无风险的奇技淫巧达到目的,这种方式好像没有.
+template<typename K, typename V> class MapStore;//提前声明,然后使用友元类.
 
 
 template <typename K, typename V>
