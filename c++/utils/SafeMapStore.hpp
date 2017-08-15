@@ -55,7 +55,7 @@ public:
         return m_rawPtr->sharedPtr();
     };
 
-    void upsetData(const std::map<K, V>& allPair)
+    void upsertData(const std::map<K, V>& allPair)
     {
         if (allPair.empty())
             return;
