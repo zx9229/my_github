@@ -1,33 +1,44 @@
 [
   {
     "spawn": {
-      "file": "D:\\xxxxxxxx\\test_exe.exe",
+      "file": "D:\\xxxxxxxx\\jiao_hu.exe",
       "args": "",
       "workdir": "D:\\xxxxxxxx\\QuoteServerGitHub"
     }
   },
   { "set": { "timeout": 60 } },
-  { "debug": "local_time" },
-  { "expect": { "please input": [ ] } },
-  { "debug": "local_time" },
 
+  { "debug": "local_time" },
+  { "expect": { "please input:": [ ] } },
+  { "send": "test_1_data\r" },
+  { "debug": "local_time" },
   { "debug": "latest_output" },
-  { "send": "ceshi_1\r" },
-
+  { "send_user": "====== point_1_ok\n" },
+  
   { "debug": "local_time" },
-  { "expect": { "please input": [ ] } },
+  { "expect": { "please input:\\[test_1_data\\]:": [ ] } },
+  { "send": "test_2_data\r" },
   { "debug": "local_time" },
-
   { "debug": "latest_output" },
-  { "send": "ceshi_sleep\r" },
-  { "sleep": 3 },
+  { "send_user": "====== point_2_ok\n" },
 
   { "debug": "local_time" },
-  { "expect": { "please input": [ ] } },
+  { "expect": { "please input:\\[test_2_data\\]:": [ ] } },
+  { "send": "test_final_data\r" },
   { "debug": "local_time" },
-
-  { "send": "xxxxxx\r" },
   { "debug": "latest_output" },
-  { "send_user": "all_done\n" },
+  { "send_user": "====== point_3_ok\n" },
+
+  { "debug": "local_time" },
+  { "expect": { "please input:\\[test_final_data\\]:": [ ] } },
+  { "send": "exit\r" },
+  { "debug": "local_time" },
+  { "debug": "latest_output" },
+  { "send_user": "====== point_4_ok\n" },
+
+  { "debug": "local_time" },
+  { "expect": { "": [ ] } },
+  { "debug": "latest_output" },
+
   { "sleep": 3 }
 ]

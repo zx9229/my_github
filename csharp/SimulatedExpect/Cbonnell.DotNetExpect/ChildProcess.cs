@@ -186,9 +186,18 @@ namespace Cbonnell.DotNetExpect
             return this.readLoopWithTimeout<string>((s) => s, (s) => s.Contains(expectedData), this.Options.TimeoutMilliseconds);
         }
 
-        public string ReadZx(IEnumerable<string> allData, ref string selectedData, ref bool isExit, ref bool isTimeout)
+        /// <summary>
+        /// Reads the child process's console output (screen buffer) until the content of the screen output contains the expected data.
+        /// </summary>
+        /// <param name="allData">要搜索的所有字符串.</param>
+        /// <param name="enableRegexp">是否以正则表达式的方式搜索字符串.</param>
+        /// <param name="selectedData">找到的第一个字符串.</param>
+        /// <param name="isExit">子进程是否已经退出.</param>
+        /// <param name="isTimeout">搜索超时.</param>
+        /// <returns>The console output.</returns>
+        public string ReadZx(IEnumerable<string> allData, bool enableRegexp, ref string selectedData, ref bool isExit, ref bool isTimeout)
         {
-            return readLoopWithTimeoutZx(allData, ref selectedData, true, this.Options.TimeoutMilliseconds, ref isExit, ref isTimeout);
+            return readLoopWithTimeoutZx(allData, ref selectedData, enableRegexp, this.Options.TimeoutMilliseconds, ref isExit, ref isTimeout);
         }
 
         /// <summary>
@@ -322,6 +331,9 @@ namespace Cbonnell.DotNetExpect
             private set;
         }
 
+        /// <summary>
+        /// 读出来的全部的控制台输出.
+        /// </summary>
         public string TotalConsoleOutput
         {
             get
@@ -330,6 +342,9 @@ namespace Cbonnell.DotNetExpect
             }
         }
 
+        /// <summary>
+        /// 读出来的最新的控制台输出.
+        /// </summary>
         public string LatestConsoleOutput
         {
             get

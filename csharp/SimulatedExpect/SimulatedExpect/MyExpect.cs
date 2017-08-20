@@ -64,10 +64,17 @@ namespace SimulatedExpect
                 m_childProcess.Options.TimeoutMilliseconds = timeoutSeconds * 1000;
             }
 
+            bool enableRegexp = true;
+            if (m_dict.ContainsKey(this.regexp))
+            {
+                int regexpFlag = System.Convert.ToInt32(m_dict[this.regexp]);
+                enableRegexp = regexpFlag == 0 ? false : true;
+            }
+
             bool isExit = false;
             bool isTimeout = false;
             string selectedData = null;
-            m_childProcess.ReadZx(allSearchData, ref selectedData, ref isExit, ref isTimeout);
+            m_childProcess.ReadZx(allSearchData, enableRegexp, ref selectedData, ref isExit, ref isTimeout);
 
             Newtonsoft.Json.Linq.JArray jArrObj = null;
             if (isExit)
@@ -252,5 +259,6 @@ namespace SimulatedExpect
         private readonly string debug = "debug";
         private readonly string EOF = ""; // 用空字符串代替linux的expect中的EOF标志.
         private readonly string timeout = "timeout";
+        private readonly string regexp = "regexp";
     };
 }
