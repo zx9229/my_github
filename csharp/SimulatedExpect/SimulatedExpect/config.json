@@ -1,0 +1,33 @@
+[
+  {
+    "spawn": {
+      "file": "D:\\xxxxxxxx\\test_exe.exe",
+      "args": "",
+      "workdir": "D:\\xxxxxxxx\\QuoteServerGitHub"
+    }
+  },
+  { "set": { "timeout": 60 } },
+  { "debug": "local_time" },
+  { "expect": { "please input": [ ] } },
+  { "debug": "local_time" },
+
+  { "debug": "latest_output" },
+  { "send": "ceshi_1\r" },
+
+  { "debug": "local_time" },
+  { "expect": { "please input": [ ] } },
+  { "debug": "local_time" },
+
+  { "debug": "latest_output" },
+  { "send": "ceshi_sleep\r" },
+  { "sleep": 3 },
+
+  { "debug": "local_time" },
+  { "expect": { "please input": [ ] } },
+  { "debug": "local_time" },
+
+  { "send": "xxxxxx\r" },
+  { "debug": "latest_output" },
+  { "send_user": "all_done\n" },
+  { "sleep": 3 }
+]

@@ -1,0 +1,29 @@
+[
+{        "spawn":{      "file": "git",
+                        "args": "pull --rebase",
+				     "workdir": "D:\\my_test_folder\\"
+	             }
+},
+{          "set":{   "timeout": 30 } },
+{       "expect":{ "期望字符串": [] } },
+{         "send":  "发送字符串"       },  
+{       "expect":{ 
+                     "字符串一": [
+					              { "send_user": "命中了字符串1" },
+                                  {      "send": "字符串1的响应" }
+                                ],  
+                     "字符串二": [ 
+					              { "send_user": "命中了字符串2" },
+                                  {      "send": "字符串2的响应" }
+                                ]
+                 }
+},
+{    "send_user":  "即将进行睡眠\n"  },  { "note": "应当用\n表示打印到屏幕上的换行动作"        },
+{        "sleep":  睡眠多少秒        },  { "note": "本程序用含有note的命令表示注释"            },
+{         "send":  "程序退出命令\r"  },  { "note": "应当用\r表示与子进程交互时的敲击回车键动作" },
+{        "debug":  "latest_output"  },  { "note": "latest表示最后一次读取的字符串"  },
+{        "debug":  "total_output"   },  
+{        "debug":  "exit_code"      },
+{        "debug":  "local_time"     },
+{       "expect":{          "":[] } },  { "note": "本程序用空字符串代替表示EOF标志" },
+]
