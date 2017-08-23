@@ -453,6 +453,7 @@ namespace Cbonnell.DotNetExpect
 
             if (!isExit && !isTimeout && this.Options.ClearConsole)
             {
+                this.totalConsoleOutput += output;
                 this.ClearConsole();
             }
 
@@ -471,7 +472,6 @@ namespace Cbonnell.DotNetExpect
             this.readResponseAndThrow();
 
             this.latestConsoleOutput = this.proxy.CommandPipeReader.ReadString();
-            this.totalConsoleOutput = this.latestConsoleOutput;
 
             return this.latestConsoleOutput;
         }

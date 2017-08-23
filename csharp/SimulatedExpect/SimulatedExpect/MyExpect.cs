@@ -17,10 +17,11 @@ namespace SimulatedExpect
         public void run(string path, System.Text.Encoding encoding)
         {
             string content = System.IO.File.ReadAllText(path, encoding);
-            //使用开源的类库Newtonsoft.Json(下载地址http://json.codeplex.com/). 下载后加入工程就能用.
-            //CodePlex是微软于2006年推出的开源软件托管平台,将于2017年12月关闭,届时会将代码迁移到github上.
+            //使用开源的类库"Newtonsoft.Json"(下载地址http://json.codeplex.com/). 下载后加入工程就能用.
+            //CodePlex是微软于2006年推出的开源软件托管平台, 将于2017年12月关闭, 届时会将代码迁移到github上.
             var jArrObj = (Newtonsoft.Json.Linq.JArray)Newtonsoft.Json.JsonConvert.DeserializeObject(content);
             do_jarray(jArrObj);
+
             return;
         }
 
@@ -54,6 +55,7 @@ namespace SimulatedExpect
         private void do_expect(Newtonsoft.Json.Linq.JObject cmdLine)
         {
             var allAction = (Newtonsoft.Json.Linq.JObject)cmdLine[this.expect];
+
             //在所有的要搜索的字符串中,可能包含指代程序退出(EOF)的空字符串(""),要把它过滤掉.
             var allSearchData = allAction.Properties().Select(item => item.Name.ToString()).Where(item => 0 < item.Length).ToArray();
 
