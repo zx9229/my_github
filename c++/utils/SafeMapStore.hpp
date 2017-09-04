@@ -47,13 +47,13 @@ public:
     void reset()
     {
         SMapTypePtr newPtr = SMapTypePtr(new SMapType);
-        m_rawPtr = newPtr.get();
+        m_rawPtr.store(newPtr.get());
         m_autoPtr = newPtr;
     };
 
     SMapTypePtr getData()
     {
-        return m_rawPtr->sharedPtr();
+        return m_rawPtr.load()->sharedPtr();
     };
 
     void upsertData(const std::map<K, V>& allPair)
@@ -62,8 +62,8 @@ public:
             return;
 
         SMapTypePtr newPtr;
-        if (m_rawPtr)
-            newPtr = SMapTypePtr(new SMapType(*m_rawPtr));
+        if (m_rawPtr.load())
+            newPtr = SMapTypePtr(new SMapType(*m_rawPtr.load()));
         else
             newPtr = SMapTypePtr(new SMapType);
 
@@ -72,7 +72,7 @@ public:
             newPtr->m_data[p.first] = p.second;
         }
 
-        m_rawPtr = newPtr.get();
+        m_rawPtr.store(newPtr.get());
         m_autoPtr = newPtr;
     };
 
@@ -82,8 +82,8 @@ public:
             return;
 
         SMapTypePtr newPtr;
-        if (m_rawPtr)
-            newPtr = SMapTypePtr(new SMapType(*m_rawPtr));
+        if (m_rawPtr.load())
+            newPtr = SMapTypePtr(new SMapType(*m_rawPtr.load()));
         else
             newPtr = SMapTypePtr(new SMapType);
 
@@ -92,13 +92,13 @@ public:
             newPtr->m_data.erase(item);
         }
 
-        m_rawPtr = newPtr.get();
+        m_rawPtr.store(newPtr.get());
         m_autoPtr = newPtr;
     };
 
 private:
     SMapTypePtr m_autoPtr;
-    SMapType*   m_rawPtr;
+    std::atomic<SMapType*> m_rawPtr;
 };
 
 /*
