@@ -18,6 +18,7 @@
 
 ARRTAG=([0]=".tar.gz"   [1]=".tar.bz2"  [2]=".tar"      [3]=".gz"     [4]=".Z"          [5]=".7z"    [6]=".rar"     [7]=".zip"  )
 ARRCMD=([0]="tar -xzf " [1]="tar -xjf " [2]="tar -xvf " [3]="gunzip " [4]="uncompress " [5]="7za x " [6]="unrar e " [7]="unzip ")
+# Linux默认只能压缩成tar.bz2或tar.gz，这两者建议选取tar.bz2,压缩命令为:tar -jcvf czm_code_trunk.tar.bz2 czm_code_trunk/
 
 GetCmdIdx()
 {
